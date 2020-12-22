@@ -1,74 +1,68 @@
 #include "Parser.h"
+
+#include <ctype.h>
+
+#include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
-Parser::Parser(int argc, char **argv)
-{
-	this->flags = 0;
-	if(argc < 3)
-	{
-		flags |= Parser::Flags::NOT_ENOUGH_ARGS;
-	}
-	while(*(++argv) != NULL)
-	{
-		if(!strcmp(*argv, "-f") || !strcmp(*argv, "--force") )
-			flags |= Parser::Flags::FORCE;
-		if(!strcmp(*argv, "-h") || !strcmp(*argv, "--help") )
-			flags |= Parser::Flags::HELP;
-		if(!strcmp(*argv, "-v") || !strcmp(*argv, "--version") )
-		{
-			flags |= Parser::Flags::_VERSION;
-			flags &= ~(flags<<Parser::Flags::HELP);
-		}
-	}
+char *Parser::optarg = nullptr;
+char *Parser::optstr = nullptr;
+std::vector<char> Parser::flags = {};
+
+char Parser::getopt(int argc, char **argv, const char *optstring) {
+  if (Parser::optstr == nullptr) {
+    Parser::optarg = nullptr;
+    Parser::optstr = (char *)optstring;
+  }
+  char result = 0;
+  char **arg = nullptr;
+  if (Parser::optstr[0] == ':') {
+    Parser::optstr++;
+  }
+  if (isalpha(Parser::optstr[0])) {
+    arg = Parser::findarg(argc, argv, Parser::optstr[0]);
+    if (arg == nullptr) {
+      result = Parser::Status::NOT_FOUND;  // argument not found, keep looping
+    } else if (Parser::optstr[1] == ':') {
+      if (arg[1] && arg[1][0] != '-') {
+        Parser::optarg = arg[1];
+        result = arg[0][1];
+      } else {
+        fprintf(stderr, "%c: %s\n", arg[0][1], "Requires an argument");
+        exit(1);
+      }
+    } else {
+      if (arg[0][0] == '-' && arg[0][1]) {
+        Parser::optarg = nullptr;
+        result = arg[0][1];
+      }
+    }
+  } else {
+    result = Parser::Status::END_OF_ARGS;
+  }
+  Parser::optstr++;
+  return result;
 }
 
-void 
-Parser::help() const
-{
-	puts(
-	"Usage: bfc <source> <destination> [options]\n"
-	"\t-f, --force	ignore all warnings and compile\n"
-	"\t-v, --version	prints current compiler version\n"
-	"\t-h, --help	prints this message\n"
-	);
+char **Parser::findarg(int argc, char **argv, char searched) {
+  for (int i = 0; i < argc; i++) {
+    if (argv[i][0] == '-' &&
+        argv[i][1] == searched) {  // nothing happens if we hit null character
+      return &argv[i];
+    }
+  }
+  return nullptr;
 }
 
-void 
-Parser::version(unsigned int version, unsigned int subversion) const
-{
-	printf("brainfuck compiler (bfc) %d.%d\n", version, subversion);
-}
+void Parser::set(const char flag) { Parser::flags.push_back(flag); }
 
-bool 
-Parser::is_good() const
-{
-	/*
-		E.g. bfc code.bf out.exe --help
-		is going to pass following ones
-	*/
-	if(this->flags & Parser::Flags::NOT_ENOUGH_ARGS)
-		return false;
-	else if(this->flags & Parser::Flags::HELP)
-		return false;
-	else if(this->flags & Parser::Flags::_VERSION)
-		return false;
-	return true;
-}
-
-void 
-Parser::validate() const
-{
-	if(this->flags & Parser::Flags::HELP)
-		this->help();
-	else if(this->flags & Parser::Flags::_VERSION)
-		this->version(this->VERSION, this->SUBVERSION);
-	else if(this->flags & Parser::Flags::NOT_ENOUGH_ARGS)
-		this->help();
-}
-
-bool 
-Parser::force() const
-{
-	return (this->flags & Parser::Flags::FORCE);
+bool Parser::isset(const char flag) {
+  for (const char i : Parser::flags) {
+    if (i == flag) {
+      return true;
+    }
+  }
+  return false;
 }
